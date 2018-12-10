@@ -1,0 +1,149 @@
+---
+title: "615 In Class FlexDashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### HeatMap
+
+```{r}
+setwd("/Users/CindyWang/Desktop/678/midterm_project")
+flights <- read.csv("flights.csv")
+weather <- read.csv("weather.csv")
+airlines <- read.csv("airlines.csv")
+
+
+library(dplyr)
+train_weather <- weather %>%
+  dplyr::select(NAME,DATE,WT01,WT02,WT03,WT05,WT08,SNOW,AWND,TAVG,PRCP) %>%
+  filter(NAME=="ATLANTA HARTSFIELD INTERNATIONAL AIRPORT, GA US") %>%
+  mutate(DAY_OF_MONTH = 1:31)
+train_weather[is.na(train_weather)] <- 0
+
+test_weather <- weather2 %>%
+  dplyr::select(NAME,DATE,WT01,WT02,WT03,WT05,WT08,SNOW,AWND,TAVG,PRCP) %>%
+  filter(NAME=="ATLANTA HARTSFIELD INTERNATIONAL AIRPORT, GA US") %>%
+  mutate(DAY_OF_MONTH = 1:31)
+test_weather[is.na(test_weather)] <- 0
+
+#TRAIN
+##join "flights" and "weather"
+flights$X <- NULL
+train <- inner_join(flights,train_weather,by="DAY_OF_MONTH")
+
+##join "train" and "airlines" -> train
+names(airlines)[names(airlines) == "Code"] <- "OP_UNIQUE_CARRIER"
+train <- inner_join(train,airlines,by="OP_UNIQUE_CARRIER")
+
+##change the data class of the filtered data to enable data processing and running algorithms
+train$DAY_OF_MONTH <- as.numeric(train$DAY_OF_MONTH)
+train$DAY_OF_WEEK <- as.factor(train$DAY_OF_WEEK)
+train$ORIGIN <- as.character(train$ORIGIN)
+train$DEST_STATE_ABR <- as.character(train$DEST_STATE_ABR)
+
+#TEST
+##join "flights2" and "weather2"
+flights2$X <- NULL
+test <- inner_join(flights2,test_weather,by="DAY_OF_MONTH")
+
+##join "test" and "airlines" -> test
+names(airlines)[names(airlines) == "Code"] <- "OP_UNIQUE_CARRIER"
+test <- inner_join(test,airlines,by="OP_UNIQUE_CARRIER")
+
+##change the data class of the filtered data to enable data processing and running algorithms
+test$DAY_OF_MONTH <- as.numeric(test$DAY_OF_MONTH)
+test$DAY_OF_WEEK <- as.factor(test$DAY_OF_WEEK)
+test$ORIGIN <- as.character(test$ORIGIN)
+test$DEST_STATE_ABR <- as.character(test$DEST_STATE_ABR)
+
+train <- train %>% 
+  filter(ORIGIN=="ATL") %>%
+  mutate(total_delay=DEP_DELAY+ARR_DELAY) %>%
+  na.omit()
+
+test <- test %>% 
+  filter(ORIGIN=="ATL") %>%
+  mutate(total_delay=DEP_DELAY+ARR_DELAY) %>%
+  na.omit()
+
+##Clean "train"
+train$YEAR <- NULL
+train$DEP_DELAY_NEW <- NULL
+train$ARR_DELAY_NEW <- NULL
+train$MONTH <- NULL
+train$TAXI_IN <- NULL
+train$TAXI_OUT <- NULL
+train$WHEELS_ON <- NULL
+train$WHEELS_OFF <- NULL
+train$CANCELLED <- NULL
+train$ORIGIN_CITY_NAME <- NULL
+train$DEST <- NULL
+train$DEST_CITY_NAME <- NULL
+train$DEP_DELAY_GROUP <- NULL
+train$ARR_TIME <- NULL
+train$ARR_DELAY_GROUP <- NULL
+train$NAME <- NULL
+train$DATE <- NULL
+train$ORIGIN <- NULL
+
+
+library(usmap)
+library(ggplot2)
+
+dest_count <- train %>%
+  dplyr::select(DEST_STATE_ABR,ARR_DEL15) %>%
+  group_by(DEST_STATE_ABR) %>%
+  summarise(total=n(),delay=sum(ARR_DEL15==1),percentage=(delay/total)*100)
+dest_count <- as.data.frame(dest_count)
+names(dest_count)[names(dest_count) == 'DEST_STATE_ABR'] <- 'state'
+
+plot_usmap(data = dest_count, values = "percentage", lines = "red") + 
+  scale_fill_continuous(low = "white", high = "red",name = "Delay Rate", 
+                        label = scales::comma) + 
+  theme(legend.position = "right") 
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Delay Rate by carriers
+
+```{r}
+carrier_count <- train %>%
+  dplyr::select(Description,ARR_DEL15) %>%
+  group_by(Description) %>%
+  summarise(total=n(),delay=sum(ARR_DEL15==1),percentage=(delay/total))
+
+carrier_bar <- ggplot(carrier_count,aes(x=reorder(Description,percentage),
+                                        y=percentage,fill=Description)) +
+  geom_bar(stat="identity") +
+  xlab("Airlines") +
+  ylab("Delay Rate") +
+  scale_y_continuous(labels = scales::percent) +
+  coord_flip() +
+  theme_gray() +
+  theme(legend.position="none")
+
+carrier_bar
+```
+
+### Total delay time distribution
+
+```{r}
+library(ggplot2)
+ggplot(data = train, aes(x=total_delay)) +
+  geom_histogram(color="blue", bins = 500) +
+  geom_vline(aes(xintercept=mean(total_delay)),
+            color="red", linetype="dashed", size=1) +
+  theme_gray()
+```
+
